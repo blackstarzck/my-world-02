@@ -98,26 +98,26 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   });
   scene.add(new THREE.HemisphereLight('#ffffff', '#bcbcbc', 2.4));
   exhibits.forEach((p,index) => {
-    const room = rooms[index], railY = index === 1 ? 6 : 4.8, railZ = p.z+1.25;
-    const railX = (room.x[0]+room.x[1])/2, railWidth = room.x[1]-room.x[0]-1.6;
-    box(railWidth,.09,.11,railX,railY,railZ,dark,false);
+    const room = rooms[index], railY = index === 1 ? 6 : 4.8, railX = p.x+1.25;
+    const railZ = p.z, railLength = 5.2;
+    box(.11,.09,railLength,railX,railY,railZ,dark,false);
     // A short return track and slender ceiling hangers make the system readable.
-    box(.11,.09,3.6,railX+railWidth/2,railY,railZ+1.75,dark,false);
-    for (const x of [railX-railWidth*.38,railX+railWidth*.38]) {
-      box(.035,room.height-railY,.035,x,(room.height+railY)/2,railZ,dark,false);
+    box(3.6,.09,.11,railX+1.75,railY,railZ+railLength/2,dark,false);
+    for (const z of [railZ-railLength*.38,railZ+railLength*.38]) {
+      box(.035,room.height-railY,.035,railX,(room.height+railY)/2,z,dark,false);
     }
     for (const offset of [-1.75,0,1.75]) {
-      const head = new THREE.Group(); head.position.set(p.x+offset,railY-.22,railZ);
-      const direction = new THREE.Vector3(p.x+offset*.55,1.9,p.z).sub(head.position).normalize();
+      const head = new THREE.Group(); head.position.set(railX,railY-.22,p.z+offset);
+      const direction = new THREE.Vector3(p.x,p.y-.2,p.z+offset*.55).sub(head.position).normalize();
       head.quaternion.setFromUnitVectors(new THREE.Vector3(0,-1,0),direction);
       const housing = new THREE.Mesh(new THREE.CylinderGeometry(.115,.135,.32,16),dark);
       const lens = new THREE.Mesh(new THREE.CylinderGeometry(.107,.107,.014,16),glow);
       lens.position.y = -.166; head.add(housing,lens); scene.add(head);
-      box(.06,.18,.06,p.x+offset,railY-.1,railZ,dark,false);
+      box(.06,.18,.06,railX,railY-.1,p.z+offset,dark,false);
       if (offset !== 0) continue;
       const spot = new THREE.SpotLight('#ffffff', index === 1 ? 110 : 80, 14, .95, 1, 2);
       spot.position.copy(head.position).addScaledVector(direction,.2);
-      spot.target.position.set(p.x,1.8,p.z-.2);
+      spot.target.position.set(p.x-.2,p.y-.3,p.z);
       spot.castShadow = true; spot.shadow.mapSize.set(1024,1024);
       spot.shadow.radius = 4; spot.shadow.blurSamples = 12; spot.shadow.intensity = .55;
       spot.shadow.camera.near = .4; spot.shadow.camera.far = 14;
@@ -178,7 +178,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   }
   function placeCamera() {
     sampleRoute(motion.position,camera.position);
-    camera.rotation.set(lookPose.pitch,routeYaw(motion.position)+lookPose.yaw,0);
+    camera.rotation.set(lookPose.pitch,routeYaw(motion.position,camera.aspect)+lookPose.yaw,0);
     camera.updateMatrixWorld();
   }
   function setView(nextMode, index = 0, travel, immediate = false) {

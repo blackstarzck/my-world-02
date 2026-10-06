@@ -9,10 +9,10 @@ export const rooms = [
   { name: '안쪽 전시실', x: [18, 29], z: [-44, -32], height: 10 },
 ];
 export const exhibits = [
-  { x: -3.5, y: 2.1, z: -6.58, yaw: 0 },
-  { x: 5.15, y: 2.15, z: -19.08, yaw: -8 },
-  { x: 16.5, y: 2.1, z: -31.04, yaw: -10 },
-  { x: 24.2, y: 2.1, z: -43.08, yaw: -8 },
+  { x: -7.58, y: 2.5, z: -4, yaw: 90 },
+  { x: -.58, y: 2.5, z: -17, yaw: 90 },
+  { x: 8.42, y: 2.5, z: -29, yaw: 90 },
+  { x: 18.42, y: 2.5, z: -41, yaw: 90 },
 ];
 export const portals = [
   { x: [-1, 3], z: -7, height: 5.2 },
@@ -31,6 +31,8 @@ along(3, -7, 3, roomHeight); across(-8, 3, 3, roomHeight);
 across(-8, -1, -7, roomHeight); across(-1, 3, -7, roomHeight, portals[0].height);
 across(-8, 3, -7, hallHeight, roomHeight); across(3, 14, -7, hallHeight);
 along(14, -20, -7, hallHeight);
+// A full-height return from the hall's rear wall forms its left exhibition corner.
+along(-1, -20, -11.7, hallHeight);
 across(-8, 10, -20, hallHeight); across(10, 14, -20, hallHeight, portals[1].height);
 across(14, 23, -20, roomHeight);
 along(8, -32, -20, roomHeight); along(23, -32, -20, roomHeight);
@@ -41,8 +43,8 @@ along(18, -44, -32, roomHeight); along(29, -44, -32, roomHeight); across(18, 29,
 // One broad sweep through each doorway. A natural cubic keeps both tangent and
 // curvature continuous; short straight/turn/straight pieces caused the old bumps.
 const points = [
-  [-3.55, 1.8], [-3.5, .5], [1.1, -7], [4.1, -11.5],
-  [12, -20], [15.35, -24.5], [21, -32], [23.25, -36.5],
+  [-2.6, 2.05], [-2.5, 1.2], [1.1, -7], [4.1, -10.7],
+  [12, -20], [14, -23.7], [21, -32], [23.25, -35.7],
 ];
 const stopPoints = [1, 3, 5, 7];
 const depth = points.map(p => -p[1]);
@@ -76,12 +78,19 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export function sampleRoute(distance, target = new Vector3()) {
   return curve.getPointAt(clamp(distance/routeLength, 0, 1), target);
 }
-export function routeYaw(distance) {
+const stationYaw = exhibits.map((art,index) => {
+  const position = sampleRoute(stops[index]);
+  // Leave the artwork left of centre and show the adjoining corner on its right.
+  return Math.atan2(position.x-art.x,position.z-art.z)-12*Math.PI/180;
+});
+export function routeYaw(distance, aspect = 16/9) {
+  // Portrait framing keeps the oblique artwork within the narrow viewport.
+  const portraitAim = clamp((1.2-aspect)/.5,0,1)*8*Math.PI/180;
   const i = Math.max(0, Math.min(2, stops.findIndex(stop => stop > distance)-1));
-  if (distance >= stops.at(-1)) return exhibits.at(-1).yaw * Math.PI/180;
+  if (distance >= stops.at(-1)) return stationYaw.at(-1)+portraitAim;
   const t = clamp((distance-stops[i])/(stops[i+1]-stops[i]), 0, 1);
   const blend = t*t*t*(10+t*(-15+6*t));
-  return (exhibits[i].yaw + (exhibits[i+1].yaw-exhibits[i].yaw)*blend)*Math.PI/180;
+  return stationYaw[i]+(stationYaw[i+1]-stationYaw[i])*blend+portraitAim;
 }
 export function nearestStop(distance) {
   return stops.reduce((closest, stop, i) => Math.abs(stop-distance) < Math.abs(stops[closest]-distance) ? i : closest, 0);

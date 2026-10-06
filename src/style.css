@@ -34,6 +34,7 @@ body[data-moving="true"] #details-button{opacity:.45}
 /* Neutral typography and atmosphere for the white clay exhibition. */
 .world{background:#ededed}.atmosphere{background:radial-gradient(ellipse at 50% 42%,transparent 45%,#00000006 100%)}
 .site-header,.site-footer,.gallery-ui,.entrance{color:#303030;--line:#30303040}
+.site-header{background:linear-gradient(#f5f5f5ed,#f5f5f5ad 60%,transparent)}
 .menu-icon i,.sound-button i{background:currentColor}.edition{color:#565656}
 .entrance{background:linear-gradient(90deg,#f3f3f3d9 0%,#f3f3f366 22%,transparent 38%,transparent 62%,#f3f3f366 78%,#f3f3f3d9 100%)}
 .entrance-eyebrow,.entrance-note{color:#505050}.enter-button{border-color:#30303066;background:#ffffff66}.enter-button:hover{background:#ffffffb3;border-color:#303030}

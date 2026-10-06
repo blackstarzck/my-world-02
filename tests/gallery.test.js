@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BoxGeometry, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
-import { eyeHeight, rooms, walls, portals, exhibits, stops, routeLength, sampleRoute, routeYaw, wallClearance } from '../src/space.js';
+import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { eyeHeight, rooms, walls, portals, exhibits, screenSize, stops, routeLength, sampleRoute, routeYaw, wallClearance } from '../src/space.js';
 import { createMotion, travelDim } from '../src/motion.js';
 import { createLook } from '../src/look.js';
 
@@ -58,15 +58,15 @@ test('all rotated artwork centres face their station and are unobstructed', () =
   solids.forEach(mesh => mesh.geometry.dispose()); material.dispose();
 });
 
-test('each adjacent move in either direction takes 3–4 seconds at 30, 60 and 144 Hz', () => {
+test('each adjacent move in either direction takes 1.7–2.2 seconds at 30, 60 and 144 Hz', () => {
   for (const fps of [30,60,144]) for (let i = 0; i < stops.length-1; i++) for (const direction of [1,-1]) {
     const start = direction > 0 ? stops[i] : stops[i+1], end = direction > 0 ? stops[i+1] : stops[i];
     const motion = createMotion(start,{max:routeLength}); motion.target(end);
     const duration = finish(motion, (state, before) => {
-      assert.ok(Math.abs(state.position-before) <= 10.5/fps+.00001, 'no teleport');
+      assert.ok(Math.abs(state.position-before) <= 17/fps+.00001, 'no teleport');
       assert.ok(state.position >= Math.min(start,end)-1e-8 && state.position <= Math.max(start,end)+1e-8, 'no overshoot');
     }, fps);
-    assert.ok(duration >= 3 && duration <= 4, String(duration));
+    assert.ok(duration >= 1.7 && duration <= 2.2, String(duration));
     assert.equal(motion.position,end);
   }
 });
@@ -80,7 +80,27 @@ test('a distant destination passes intermediate stations without stopping', () =
     });
     assert.ok(wallClearance(sampleRoute(state.position)) >= .6);
   });
-  assert.equal(passed.size,2); assert.ok(duration > 8 && duration < 10);
+  assert.equal(passed.size,2); assert.ok(duration > 4 && duration < 5);
+});
+
+test('left-wall corner artwork is fully visible and remains left of the camera centre', () => {
+  for (const aspect of [16/9,390/844,320/568]) {
+    const camera = new PerspectiveCamera(60,aspect,.08,100);
+    camera.zoom = Math.min(1,aspect/.76); camera.updateProjectionMatrix();
+    exhibits.forEach((art,index) => {
+      camera.position.copy(sampleRoute(stops[index]));
+      camera.rotation.set(0,routeYaw(stops[index],aspect),0,'YXZ'); camera.updateMatrixWorld();
+      const centre = new Vector3(art.x,art.y,art.z).project(camera);
+      assert.ok(centre.x < -.05 && centre.x > -.6, 'left-hand framing');
+      const facing = camera.position.clone().sub(new Vector3(art.x,eyeHeight,art.z)).normalize();
+      assert.ok(facing.x > .5 && facing.x < .85, 'oblique view of left wall');
+      for (const x of [-screenSize.width/2,screenSize.width/2]) for (const y of [-screenSize.height/2,screenSize.height/2]) {
+        const corner = new Vector3(art.x,art.y+y,art.z-x).project(camera);
+        assert.ok(Math.abs(corner.x) < .98 && Math.abs(corner.y) < .98, 'entire screen within viewport');
+      }
+      assert.ok(art.z-screenSize.width/2 >= rooms[index].z[0]+.3, 'no rear-wall penetration');
+    });
+  }
 });
 
 test('rapid destinations replace one another; reversing brakes before changing direction', () => {

@@ -20,7 +20,7 @@ export function createMotion(initial = 0, { min = 0, max = Infinity } = {}) {
   function travel() {
     const delta = destination-position;
     if (Math.abs(delta) < .000001 && Math.abs(velocity) < .00001) { position = destination; velocity = acceleration = 0; plan = null; return; }
-    let duration = 1.1+Math.abs(delta)/6.2;
+    let duration = .65+Math.abs(delta)/12;
     if (velocity*delta > 0) duration = Math.min(duration,2.4*Math.abs(delta/velocity));
     const candidate = trajectory(position,destination,velocity,acceleration,Math.max(.08,duration));
     const direction = Math.sign(delta);
@@ -29,7 +29,7 @@ export function createMotion(initial = 0, { min = 0, max = Infinity } = {}) {
     if (Math.abs(velocity) < .00001 || (direction*velocity > 0 && monotone)) { plan = candidate; return; }
     // A reverse request brakes on the same rail before starting the return.
     const speed = Math.abs(velocity), available = velocity > 0 ? max-position : position-min;
-    let brakeTime = Math.min(.75,Math.max(.2,speed/12),available*1.4/speed);
+    let brakeTime = Math.min(.6,Math.max(.2,speed/24),available*1.4/speed);
     if (velocity*acceleration < 0) brakeTime = Math.min(brakeTime,2*speed/Math.abs(acceleration));
     brakeTime = Math.max(.001,brakeTime);
     const end = clamp(position+velocity*brakeTime/2+acceleration*brakeTime*brakeTime/12);
@@ -64,6 +64,6 @@ export function createMotion(initial = 0, { min = 0, max = Infinity } = {}) {
   };
 }
 export function travelDim(velocity) {
-  const t = Math.min(1,Math.abs(velocity)/8);
+  const t = Math.min(1,Math.abs(velocity)/14);
   return .18*t*t*(3-2*t);
 }
