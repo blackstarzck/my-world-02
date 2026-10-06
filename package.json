@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite --host 127.0.0.1 --port 5173 --strictPort", "build": "vite build", "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort", "check": "node --check src/main.js && node --check src/gallery.js && node --check src/space.js && node --check src/motion.js && node --check public/demos/demo.js", "test": "node --test tests/gallery.test.js" },
+  "scripts": { "dev": "vite --host 127.0.0.1 --port 5173 --strictPort", "build": "vite build", "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort", "check": "node --check src/main.js && node --check src/gallery.js && node --check src/space.js && node --check src/motion.js && node --check src/look.js && node --check public/demos/demo.js", "test": "node --test tests/gallery.test.js" },
   "dependencies": { "three": "0.186.1" },
   "devDependencies": { "vite": "^7.3.1" }
 }
