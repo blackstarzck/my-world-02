@@ -8,7 +8,7 @@ app.innerHTML = `
   <header class="site-header"><a class="brand" href="#" aria-label="My World 입구로"><span>${portfolio.name}</span><small>${portfolio.subtitle}</small></a><nav aria-label="주 메뉴"><button id="about-button">About</button><button id="index-button">Index <span class="menu-icon" aria-hidden="true"><i></i><i></i></span></button></nav></header>
   <main>
     <section id="entrance" class="entrance" aria-labelledby="entrance-title"><div class="entrance-eyebrow">AN INDEPENDENT PORTFOLIO · VOL. 01</div><button id="enter-button" class="enter-button"><span>Enter gallery</span><span class="enter-symbol" aria-hidden="true">↗</span></button><div class="entrance-bottom"><h1 id="entrance-title">My <i>World.</i></h1><div class="entrance-note"><span>생각이 공간이 되는 곳.</span><span>작업을 걷고, 발견하고, 경험하세요.</span></div></div></section>
-    <section id="gallery-ui" class="gallery-ui" hidden aria-label="프로젝트 갤러리"><div class="gallery-guide">SCROLL TO EXPLORE <span></span> DRAG TO MOVE</div><div class="gallery-footer"><div class="project-heading"><span id="project-category" class="eyebrow">SELECTED WORKS / 01—04</span><h1 id="project-title">A walk through<br><i>my work.</i></h1><button id="details-button" class="text-button" hidden>프로젝트 열기 <span>↗</span></button></div><div class="gallery-controls"><div class="pagination"><button id="previous-button" class="circle-button" aria-label="이전 프로젝트">←</button><div id="project-dots" class="project-dots">${projects.map((p,i) => `<button data-project="${i}" aria-label="${p.title.replace('\n',' ')} 보기"><span></span></button>`).join('')}</div><button id="next-button" class="circle-button" aria-label="다음 프로젝트">→</button></div><span class="counter" id="counter">01 — 04</span></div><button id="overview-button" class="pill-button">All projects <span>↗</span></button></div></section>
+    <section id="gallery-ui" class="gallery-ui" hidden aria-label="프로젝트 갤러리"><div class="gallery-guide"><span id="gallery-guide-text">SCROLL TO EXPLORE</span><i></i><button id="space-button">공간 둘러보기 ↗</button></div><div class="gallery-footer"><div class="project-heading"><span id="project-category" class="eyebrow">SELECTED WORKS / 01—04</span><h1 id="project-title">A walk through<br><i>my work.</i></h1><button id="details-button" class="text-button" hidden>프로젝트 열기 <span>↗</span></button></div><div class="gallery-controls"><div class="pagination"><button id="previous-button" class="circle-button" aria-label="이전 프로젝트">←</button><div id="project-dots" class="project-dots">${projects.map((p,i) => `<button data-project="${i}" aria-label="${p.title.replace('\n',' ')} 보기"><span></span></button>`).join('')}</div><button id="next-button" class="circle-button" aria-label="다음 프로젝트">→</button></div><span class="counter" id="counter">01 — 04</span></div><button id="overview-button" class="pill-button">All projects <span>↗</span></button></div></section>
     <section id="detail" class="detail" hidden aria-label="프로젝트 상세"><div class="live-side"><div class="live-toolbar"><span><i></i> LIVE WEBSITE</span><a id="external-link" target="_blank" rel="noopener noreferrer">새 탭에서 열기 ↗</a></div><div class="iframe-holder"><iframe id="project-iframe" title="선택한 프로젝트의 실제 웹사이트" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" referrerpolicy="strict-origin-when-cross-origin"></iframe><div id="frame-loading" class="frame-loading">프로젝트를 불러오는 중<span></span></div></div><p class="embed-help">화면이 보이지 않으면 <a id="fallback-link" target="_blank" rel="noopener noreferrer">새 탭에서 열어 보세요 ↗</a></p></div><article class="project-story" tabindex="-1"><button id="close-detail" class="close-button" aria-label="갤러리로 돌아가기">×</button><div class="story-content"><span id="detail-category" class="eyebrow"></span><h1 id="detail-title"></h1><p id="detail-summary" class="summary"></p><dl class="project-meta"><div><dt>ROLE</dt><dd id="detail-role"></dd></div><div><dt>YEAR</dt><dd id="detail-year"></dd></div></dl><div class="story-rule"></div><p id="detail-description" class="description"></p><div class="try-it"><span>EXPERIENCE IT</span><p id="detail-interaction"></p></div><div id="detail-tags" class="tags"></div><button id="next-detail" class="next-project"><span>NEXT PROJECT</span><strong></strong><i>↗</i></button></div></article></section>
   </main>
   <footer class="site-footer"><span class="edition">PERSONAL EXHIBITION / 2026</span><button id="sound-button" class="sound-button" aria-label="배경음 켜기" aria-pressed="false"><span>Sound OFF</span><i></i><i></i><i></i><i></i></button></footer>
@@ -40,16 +40,17 @@ function updateHeading() {
   const p = projects[selected];
   $('project-title').innerHTML = mode === 'overview' ? 'A walk through<br><i>my work.</i>' : p.title.replace('\n','<br>');
   $('project-category').textContent = mode === 'overview' ? 'SELECTED WORKS / 01—04' : `${p.number} / ${p.category.toUpperCase()}`;
-  $('counter').textContent = `${p.number} — 04`;
+  $('counter').textContent = mode === 'overview' ? '04 WORKS' : `${p.number} — 04`;
   $('project-dots').querySelectorAll('button').forEach((button, i) => {
     button.setAttribute('aria-current', String(mode === 'focus' && i === selected));
   });
-  $('overview-button').innerHTML = mode === 'focus' ? '복도 보기 <span>↗</span>' : 'All projects <span>↗</span>';
+  $('space-button').textContent = mode === 'overview' ? '작품으로 돌아가기 ↗' : '공간 둘러보기 ↗';
+  $('gallery-guide-text').textContent = mode === 'overview' ? 'SCROLL TO WALK' : 'SCROLL TO EXPLORE';
   $('previous-button').disabled = mode === 'focus' && selected === 0;
   $('next-button').disabled = mode === 'focus' && selected === projects.length - 1;
 }
 function enter() {
-  setMode('overview'); gallery.setView('overview', 0, travel); updateHeading();
+  selected = 0; setMode('focus'); gallery.setView('focus', 0); updateHeading();
   history.replaceState(null, '', '#gallery');
   announce('갤러리에 입장했습니다. 스크롤, 드래그 또는 아래 프로젝트 버튼으로 이동하세요.');
   if (unavailable) $('index-dialog').showModal();
@@ -83,7 +84,7 @@ function openProject(index, fromHistory = false) {
     document.querySelector('.project-story').scrollTop = 0;
     $('detail').scrollTop = 0;
     $('close-detail').focus({ preventScroll: true });
-  }, wasDetail || reduced || fromHistory ? 0 : 680);
+  }, wasDetail || reduced || fromHistory ? 0 : 180);
   if (!fromHistory) history.pushState({ project: p.id }, '', `#project/${p.id}`);
   announce(`${p.title.replace('\n',' ')} 상세 화면. 왼쪽 웹사이트를 직접 조작할 수 있습니다.`);
 }
@@ -100,9 +101,11 @@ $('index-button').addEventListener('click', () => $('index-dialog').showModal())
 $('details-button').addEventListener('click', () => openProject(selected));
 $('close-detail').addEventListener('click', closeProject);
 $('next-detail').addEventListener('click', () => openProject((selected + 1) % projects.length));
-$('overview-button').addEventListener('click', () => {
-  if (mode === 'focus') { travel = Math.max(0, selected * .24); setMode('overview'); gallery.setView('overview', selected, travel); updateHeading(); history.replaceState(null,'','#gallery'); }
-  else $('index-dialog').showModal();
+$('overview-button').addEventListener('click', () => $('index-dialog').showModal());
+$('space-button').addEventListener('click', () => {
+  if (mode === 'overview') { focusProject(selected); return; }
+  travel = 0; setMode('overview'); gallery.setView('overview', selected, travel); updateHeading();
+  history.replaceState(null,'','#space');
 });
 $('previous-button').addEventListener('click', () => focusProject(mode === 'overview' ? 0 : selected - 1));
 $('next-button').addEventListener('click', () => focusProject(mode === 'overview' ? 0 : selected + 1));
@@ -116,8 +119,8 @@ document.querySelector('.brand').addEventListener('click', (event) => {
 });
 function navigate(delta) {
   if (modalOpen() || !['overview','focus'].includes(mode)) return;
-  if (mode === 'overview') { travel = Math.max(0, Math.min(1, travel + delta * .00075)); gallery.setView(mode, selected, travel); }
-  else if (performance.now() - wheelTime > 820 && Math.abs(delta) > 12) { wheelTime = performance.now(); focusProject(selected + Math.sign(delta)); }
+  if (mode === 'overview') { travel = Math.max(0, Math.min(1, travel + Math.max(-120, Math.min(120, delta)) * .00045)); gallery.setView(mode, selected, travel); }
+  else if (performance.now() - wheelTime > 900 && Math.abs(delta) > 12) { wheelTime = performance.now(); focusProject(selected + Math.sign(delta)); }
 }
 window.addEventListener('wheel', (event) => { if (['overview','focus'].includes(mode) && !modalOpen()) { event.preventDefault(); navigate(event.deltaY || event.deltaX); } }, { passive: false });
 let dragStart = null;
@@ -135,6 +138,7 @@ function readRoute() {
   const [section, id] = location.hash.slice(1).split('/');
   const index = projects.findIndex(p => p.id === id);
   if (section === 'project' && index >= 0) openProject(index, true);
+  else if (section === 'space') { setMode('overview'); travel = 0; gallery.setView('overview', selected, travel); updateHeading(); }
   else if (section === 'gallery') { $('project-iframe').removeAttribute('src'); if (index >= 0) focusProject(index); else enter(); }
   else { setMode('intro'); gallery.setView('intro'); $('project-iframe').removeAttribute('src'); }
 }

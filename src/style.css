@@ -16,3 +16,9 @@
 .project-screenshot{padding:0;object-fit:cover;display:block}
 .summary{font-size:16px}.description{font-size:15px}.try-it p{font-size:14px}.project-meta dd{font-size:12px}
 @media(max-width:600px){.project-story h1{font-size:clamp(44px,13vw,69px)}}
+/* HTML screens sit behind the depth-masked WebGL layer, so walls occlude them. */
+.world{background:#151918}.world>canvas{z-index:1;pointer-events:none}.html-world{z-index:0}.world[data-render-mode="html-in-canvas"]>canvas{pointer-events:auto}.scene-veil{position:absolute;inset:0;z-index:3;background:#151918;opacity:0;pointer-events:none}.world-project{box-shadow:none}
+.gallery-guide>span{width:auto;height:auto;background:none}.gallery-guide>i{width:25px;height:1px;background:#90948b}.gallery-guide button{font-size:10px;letter-spacing:.04em;padding:8px 0;color:#c2c7bf}.gallery-guide button:hover{color:#fff}.detail{animation:reveal .35s ease both}.approaching .gallery-ui,.approaching .entrance{transition:opacity .18s}
+@keyframes reveal{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.scene-veil{display:none}}
+
