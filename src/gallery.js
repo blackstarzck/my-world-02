@@ -9,21 +9,21 @@ import { createLook } from './look.js';
 export function createGallery(container, onSelect, onUnavailable, onTravel = () => {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const scene = new THREE.Scene(), htmlScene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#181c1b', 22, 60);
+  scene.fog = new THREE.Fog('#ededed', 28, 75);
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); }
   catch {
     onUnavailable();
     return { setView(mode, index) { onTravel({ moving: false, mode, index }); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
   }
-  renderer.setClearColor('#181c1b', 1);
+  renderer.setClearColor('#ededed', 1);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   // VSM blurs the shadow map itself, avoiding the old low-resolution jagged edge.
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.VSMShadowMap;
   renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
-  renderer.domElement.setAttribute('aria-label', '두꺼운 콘크리트 벽과 넓은 출입구로 연결된 네 전시 공간');
+  renderer.domElement.setAttribute('aria-label', '높은 천장과 흰색 무광 클레이 벽, 넓은 출입구로 연결된 네 전시 공간');
   renderer.domElement.setAttribute('role', 'img'); container.append(renderer.domElement);
   const htmlRenderer = new CSS3DRenderer();
   htmlRenderer.domElement.className = 'html-world'; container.append(htmlRenderer.domElement);
@@ -53,26 +53,26 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   let seed = 1249;
   for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
     seed = (seed*16807)%2147483647;
-    const cloud = Math.sin(x*.043)*Math.cos(y*.037)*7 + Math.sin((x+y)*.019)*4;
-    const value = Math.round(218 + seed%24 + cloud);
+    const cloud = Math.sin(x*.043)*Math.cos(y*.037)*3 + Math.sin((x+y)*.019)*2;
+    const value = Math.round(243 + seed%7 + cloud);
     grainData.set([value, value, value, 255], (y*256+x)*4);
   }
   const grain = new THREE.DataTexture(grainData, 256, 256, THREE.RGBAFormat);
   grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.repeat.set(3, 2);
   grain.magFilter = THREE.LinearFilter; grain.minFilter = THREE.LinearMipmapLinearFilter; grain.generateMipmaps = true; grain.needsUpdate = true;
-  const concrete = new THREE.MeshStandardMaterial({ color: '#626864', map: grain, bumpMap: grain, bumpScale: .014, roughness: .96 });
-  const ceiling = new THREE.MeshStandardMaterial({ color: '#404640', map: grain, roughness: 1 });
-  const floorMaterial = new THREE.MeshStandardMaterial({ color: '#444b46', map: grain, roughness: .88 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#151a18', roughness: .8 });
-  const seam = new THREE.MeshBasicMaterial({ color: '#303932' });
-  const glow = new THREE.MeshBasicMaterial({ color: '#e0dbc4' });
+  const clay = new THREE.MeshStandardMaterial({ color: '#f5f5f5', map: grain, bumpMap: grain, bumpScale: .028, roughness: 1, metalness: 0 });
+  const ceiling = new THREE.MeshStandardMaterial({ color: '#f0f0f0', map: grain, bumpMap: grain, bumpScale: .02, roughness: 1 });
+  const floorMaterial = new THREE.MeshStandardMaterial({ color: '#dedede', map: grain, bumpMap: grain, bumpScale: .015, roughness: 1 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#292929', roughness: .95 });
+  const seam = new THREE.MeshBasicMaterial({ color: '#c9c9c9' });
+  const glow = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const occluders = [];
   function box(w, h, d, x, y, z, material, blocksArtwork = true) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z); mesh.castShadow = h > .15; mesh.receiveShadow = true;
     scene.add(mesh); if (blocksArtwork) occluders.push(mesh); return mesh;
   }
-  walls.forEach(wall => box(...wall.size, ...wall.center, concrete));
+  walls.forEach(wall => box(...wall.size, ...wall.center, clay));
   rooms.forEach((room, index) => {
     const width = room.x[1]-room.x[0], depth = room.z[1]-room.z[0];
     const x = (room.x[0]+room.x[1])/2, z = (room.z[0]+room.z[1])/2;
@@ -83,22 +83,22 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     for (let sz = room.z[0]+3; sz < room.z[1]; sz += 3) box(width, .003, .012, x, .003, sz, seam, false);
     // Ceiling coves and a soft pool of light make the full-height corners legible.
     box(width-.9, .025, .07, x, room.height-.04, room.z[1]-.48, glow, false);
-    const fill = new THREE.PointLight('#d5ddcd', index === 1 ? 140 : 75, index === 1 ? 24 : 18, 2);
+    const fill = new THREE.PointLight('#ffffff', index === 1 ? 450 : 220, index === 1 ? 38 : 26, 2);
     fill.position.set(x, room.height-.6, z); scene.add(fill);
     // Low perimeter strips belong to the architecture, not a separate partition.
     for (const side of room.x) box(.025, .045, depth-.8, side+(side===room.x[0] ? .32 : -.32), .07, z, glow, false);
   });
   // Beams follow the raised ceiling; fixtures hang from visible track rails.
-  for (const z of [-10.5, -15.5]) box(21.4, .35, .35, 3, rooms[1].height-.18, z, concrete);
+  for (const z of [-10.5, -15.5]) box(21.4, .35, .35, 3, rooms[1].height-.18, z, clay);
   portals.forEach(portal => {
     const x = (portal.x[0]+portal.x[1])/2;
     box(portal.x[1]-portal.x[0]-.25, .025, .12, x, portal.height-.03, portal.z, glow, false);
-    const light = new THREE.PointLight('#ddd7c4', 24, 7, 2);
+    const light = new THREE.PointLight('#ffffff', 36, 10, 2);
     light.position.set(x, portal.height-.3, portal.z-.2); scene.add(light);
   });
-  scene.add(new THREE.HemisphereLight('#cbd4ce', '#414b3c', 1.8));
+  scene.add(new THREE.HemisphereLight('#ffffff', '#bcbcbc', 2.4));
   exhibits.forEach((p,index) => {
-    const room = rooms[index], railY = index === 1 ? 5.7 : 4.55, railZ = p.z+1.25;
+    const room = rooms[index], railY = index === 1 ? 6 : 4.8, railZ = p.z+1.25;
     const railX = (room.x[0]+room.x[1])/2, railWidth = room.x[1]-room.x[0]-1.6;
     box(railWidth,.09,.11,railX,railY,railZ,dark,false);
     // A short return track and slender ceiling hangers make the system readable.
@@ -115,11 +115,11 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       lens.position.y = -.166; head.add(housing,lens); scene.add(head);
       box(.06,.18,.06,p.x+offset,railY-.1,railZ,dark,false);
       if (offset !== 0) continue;
-      const spot = new THREE.SpotLight('#f2e6cf', index === 1 ? 130 : 100, 14, .95, 1, 2);
+      const spot = new THREE.SpotLight('#ffffff', index === 1 ? 110 : 80, 14, .95, 1, 2);
       spot.position.copy(head.position).addScaledVector(direction,.2);
       spot.target.position.set(p.x,1.8,p.z-.2);
       spot.castShadow = true; spot.shadow.mapSize.set(1024,1024);
-      spot.shadow.radius = 4; spot.shadow.blurSamples = 12; spot.shadow.intensity = .72;
+      spot.shadow.radius = 4; spot.shadow.blurSamples = 12; spot.shadow.intensity = .55;
       spot.shadow.camera.near = .4; spot.shadow.camera.far = 14;
       spot.shadow.bias = -.00015; spot.shadow.normalBias = .015;
       scene.add(spot,spot.target);

@@ -3,10 +3,10 @@ import { Curve, Vector3 } from 'three';
 export const eyeHeight = 1.65;
 export const screenSize = { width: 4.5, height: 2.8125 };
 export const rooms = [
-  { name: '첫 번째 전시실', x: [-8, 3], z: [-7, 3], height: 5.5 },
-  { name: '중앙 홀', x: [-8, 14], z: [-20, -7], height: 8 },
-  { name: '측면 전시실', x: [8, 23], z: [-32, -20], height: 5.5 },
-  { name: '안쪽 전시실', x: [18, 29], z: [-44, -32], height: 5.5 },
+  { name: '첫 번째 전시실', x: [-8, 3], z: [-7, 3], height: 10 },
+  { name: '중앙 홀', x: [-8, 14], z: [-20, -7], height: 16 },
+  { name: '측면 전시실', x: [8, 23], z: [-32, -20], height: 10 },
+  { name: '안쪽 전시실', x: [18, 29], z: [-44, -32], height: 10 },
 ];
 export const exhibits = [
   { x: -3.5, y: 2.1, z: -6.58, yaw: 0 },
@@ -15,9 +15,9 @@ export const exhibits = [
   { x: 24.2, y: 2.1, z: -43.08, yaw: -8 },
 ];
 export const portals = [
-  { x: [-1, 3], z: -7, height: 3.35 },
-  { x: [10, 14], z: -20, height: 3.5 },
-  { x: [19, 23], z: -32, height: 3.35 },
+  { x: [-1, 3], z: -7, height: 5.2 },
+  { x: [10, 14], z: -20, height: 6 },
+  { x: [19, 23], z: -32, height: 5.2 },
 ];
 
 // The same solids drive rendering, occlusion and route-clearance checks.
@@ -28,13 +28,13 @@ const along = (x, a, b, h) => wall(.6, h, b-a, x, h/2, (a+b)/2);
 const roomHeight = rooms[0].height, hallHeight = rooms[1].height;
 along(-8, -7, 3, roomHeight); along(-8, -20, -7, hallHeight);
 along(3, -7, 3, roomHeight); across(-8, 3, 3, roomHeight);
-across(-8, -1, -7, roomHeight); across(-1, 3, -7, roomHeight, 3.35);
+across(-8, -1, -7, roomHeight); across(-1, 3, -7, roomHeight, portals[0].height);
 across(-8, 3, -7, hallHeight, roomHeight); across(3, 14, -7, hallHeight);
 along(14, -20, -7, hallHeight);
-across(-8, 10, -20, hallHeight); across(10, 14, -20, hallHeight, 3.5);
+across(-8, 10, -20, hallHeight); across(10, 14, -20, hallHeight, portals[1].height);
 across(14, 23, -20, roomHeight);
 along(8, -32, -20, roomHeight); along(23, -32, -20, roomHeight);
-across(8, 19, -32, roomHeight); across(19, 23, -32, roomHeight, 3.35);
+across(8, 19, -32, roomHeight); across(19, 23, -32, roomHeight, portals[2].height);
 across(23, 29, -32, roomHeight);
 along(18, -44, -32, roomHeight); along(29, -44, -32, roomHeight); across(18, 29, -44, roomHeight);
 
