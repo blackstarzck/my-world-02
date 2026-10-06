@@ -4,6 +4,7 @@ import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Vec
 import { eyeHeight, rooms, walls, portals, exhibits, screenSize, stops, routeLength, sampleRoute, routeYaw, wallClearance } from '../src/space.js';
 import { createMotion, travelDim } from '../src/motion.js';
 import { createLook } from '../src/look.js';
+import { createInspection, frontPose } from '../src/inspection.js';
 
 function finish(motion, inspect = () => {}, fps = 120) {
   let elapsed = 0;
@@ -122,7 +123,7 @@ test('rapid destinations replace one another; reversing brakes before changing d
   assert.equal(motion.position,stops[0]); assert.equal(motion.velocity,0);
 });
 
-test('reduced-motion and detail-return positioning settles immediately, including mid-flight', () => {
+test('reduced-motion rail positioning settles immediately, including mid-flight', () => {
   const motion = createMotion(stops[0]); motion.target(stops[3]); motion.step(.1);
   motion.target(stops[2],true);
   assert.equal(motion.position,stops[2]); assert.equal(motion.velocity,0); assert.equal(motion.moving,false);
@@ -195,4 +196,75 @@ test('mouse look is bounded, damped and consistent across frame rates', () => {
     assert.deepEqual(look.step(1/fps,{enabled:false}),{yaw:0,pitch:0});
   }
   assert.ok(Math.abs(poses[30].yaw-poses[144].yaw) < 1e-10);
+});
+
+test('frontal camera centres every artwork and fits all corners on desktop and mobile', () => {
+  for (const aspect of [16/9,390/844,320/568]) exhibits.forEach(art => {
+    const pose = frontPose(art,aspect), camera = new PerspectiveCamera(60,aspect,.08,100);
+    camera.zoom = Math.min(1,aspect/.76); camera.updateProjectionMatrix();
+    camera.position.copy(pose.position); camera.rotation.set(pose.pitch,pose.yaw,0,'YXZ'); camera.updateMatrixWorld();
+    const centre = new Vector3(art.x,art.y,art.z).project(camera);
+    assert.ok(Math.abs(centre.x) < 1e-10 && Math.abs(centre.y) < 1e-10);
+    const corners = [];
+    for (const x of [-screenSize.width/2,screenSize.width/2]) for (const y of [-screenSize.height/2,screenSize.height/2]) {
+      const corner = new Vector3(art.x,art.y+y,art.z-x).project(camera); corners.push(corner);
+      assert.ok(Math.abs(corner.x) <= .79 && Math.abs(corner.y) < .8);
+    }
+    assert.ok(Math.abs(corners[0].x-corners[1].x) < 1e-10, 'no perspective skew');
+    assert.ok(Math.abs(corners[0].y-corners[2].y) < 1e-10, 'horizontal screen edges');
+  });
+});
+
+test('each approach and return remains inside its room with wall clearance', () => {
+  for (const aspect of [16/9,390/844,320/568]) exhibits.forEach((art,index) => {
+    const start = sampleRoute(stops[index]), end = frontPose(art,aspect).position, room = rooms[index];
+    for (let i = 0; i <= 500; i++) {
+      const p = start.clone().lerp(end,i/500);
+      assert.ok(wallClearance(p) >= .6, 'no walls crossed');
+      assert.ok(p.x > room.x[0]+.6 && p.x < room.x[1]-.6 && p.z > room.z[0]+.6 && p.z < room.z[1]-.6);
+    }
+  });
+});
+
+test('detail is ready once, only after 1.2 seconds of movement and a frontal hold', () => {
+  for (const fps of [30,60,144]) {
+    const sequence = createInspection(); sequence.open();
+    let time = 0, arrival = 0, completions = 0, previous = 0;
+    for (let frame = 0; frame < fps*3; frame++) {
+      sequence.step(1/fps); time += 1/fps;
+      assert.ok(sequence.blend >= previous && sequence.blend <= 1);
+      assert.ok(sequence.blend-previous < 1.7/fps, 'smooth bounded steps'); previous = sequence.blend;
+      if (!arrival && sequence.phase === 'front') arrival = time;
+      if (sequence.takeReady()) { completions++; assert.ok(time-arrival >= .24-1e-8); }
+    }
+    assert.ok(arrival >= 1.2-1e-8 && arrival <= 1.2+1/fps);
+    assert.equal(completions,1); assert.equal(sequence.blend,1);
+    sequence.close();
+    for (let frame = 0; frame < fps*2; frame++) { sequence.step(1/fps); assert.equal(sequence.takeReady(),false); }
+    assert.equal(sequence.phase,'idle'); assert.equal(sequence.blend,0);
+  }
+});
+
+test('cancelling approach or its hold never reveals detail and does not jump', () => {
+  for (const elapsed of [.1,.5,1.1,1.3]) {
+    const sequence = createInspection(); sequence.open();
+    for (let t = 0; t < elapsed; t += 1/120) sequence.step(1/120);
+    const before = sequence.blend; sequence.close(); assert.equal(sequence.blend,before);
+    for (let i = 0; i < 360; i++) {
+      const previous = sequence.blend; sequence.step(1/120);
+      assert.ok(Math.abs(sequence.blend-previous) < .02);
+      assert.equal(sequence.takeReady(),false);
+    }
+    assert.equal(sequence.phase,'idle'); assert.equal(sequence.blend,0);
+  }
+});
+
+test('reduced motion settles opening and closing immediately without stale completion', () => {
+  const sequence = createInspection(); sequence.open(true);
+  assert.equal(sequence.blend,1); assert.equal(sequence.takeReady(),true); assert.equal(sequence.takeReady(),false);
+  sequence.close(true); assert.equal(sequence.blend,0); assert.equal(sequence.takeReady(),false);
+  sequence.open(); sequence.step(.1); sequence.settle();
+  assert.equal(sequence.blend,1); assert.equal(sequence.takeReady(),true);
+  sequence.close(); sequence.step(.1); sequence.settle(); assert.equal(sequence.phase,'idle');
+  sequence.open(); sequence.reset(); sequence.step(.1); assert.equal(sequence.takeReady(),false);
 });

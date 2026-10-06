@@ -20,6 +20,7 @@ app.innerHTML = `
 const $ = (id) => document.getElementById(id);
 let mode = 'intro', selected = 0, requested = 0, travel = 0, wheelTime = 0;
 let unavailable = false;
+let inspectionLocked = false, restoreFocus = false;
 const dialogs = [$('index-dialog'), $('about-dialog')];
 const modalOpen = () => dialogs.some(dialog => dialog.open);
 const announce = (text) => { $('announcement').textContent = text; };
@@ -36,8 +37,8 @@ function setMode(next) {
   $('details-button').hidden = mode !== 'focus';
 }
 function updateNavigation() {
-  $('previous-button').disabled = mode === 'focus' && requested === 0;
-  $('next-button').disabled = mode === 'focus' && requested === projects.length - 1;
+  $('previous-button').disabled = inspectionLocked || (mode === 'focus' && requested === 0);
+  $('next-button').disabled = inspectionLocked || (mode === 'focus' && requested === projects.length - 1);
 }
 function updateHeading() {
   const p = projects[selected];
@@ -51,7 +52,13 @@ function updateHeading() {
   updateNavigation();
 }
 function onTravel(state) {
+  inspectionLocked = state.phase !== 'idle' && state.mode !== 'detail';
+  document.body.dataset.inspecting = String(inspectionLocked);
   document.body.dataset.moving = String(state.moving);
+  $('gallery-ui').inert = inspectionLocked;
+  $('world').inert = inspectionLocked || mode === 'intro' || mode === 'detail';
+  document.querySelector('.site-header').inert = inspectionLocked || mode === 'detail';
+  document.querySelector('.site-footer').inert = inspectionLocked || mode === 'detail';
   $('details-button').disabled = state.moving;
   document.querySelectorAll('[data-open]').forEach(button => { button.disabled = state.moving; });
   $('gallery-guide-text').textContent = state.moving ? '다음 공간으로 이동 중' : mode === 'overview' ? 'SCROLL TO WALK' : 'SCROLL TO EXPLORE';
@@ -60,6 +67,7 @@ function onTravel(state) {
     selected = requested = state.index; updateHeading();
     history.replaceState(null, '', '#gallery/' + projects[selected].id);
     announce(projects[selected].title.replace('\n',' ') + '. 도착했습니다. 프로젝트 열기 버튼으로 체험하세요.');
+    if (restoreFocus) { restoreFocus = false; $('details-button').focus({preventScroll:true}); }
   }
   updateNavigation();
 }
@@ -70,6 +78,7 @@ function enter() {
 function focusProject(index, immediate = false) {
   requested = Math.max(0, Math.min(projects.length-1, index));
   const previousMode = mode;
+  if (previousMode === 'detail') restoreFocus = true;
   setMode('focus');
   if (previousMode !== 'focus') updateHeading();
   gallery.setView('focus', requested, undefined, immediate);
@@ -79,6 +88,13 @@ function openProject(index, fromHistory = false) {
   if (!fromHistory && mode !== 'detail' && gallery.isMoving()) return;
   dialogs.forEach(dialog => dialog.close());
   selected = requested = index;
+  restoreFocus = false;
+  if (fromHistory || mode === 'detail' || unavailable) { showProject(index,fromHistory); return; }
+  setMode('focus'); updateHeading();
+  announce(projects[index].title.replace('\n',' ') + '. 작품 정면으로 이동합니다. Escape 키로 취소할 수 있습니다.');
+  gallery.inspect(index,() => showProject(index));
+}
+function showProject(index, fromHistory = false) {
   const p = projects[index];
   setMode('detail'); gallery.setView('detail',index);
   $('detail-title').innerHTML = p.title.replace('\n','<br>');
@@ -87,19 +103,31 @@ function openProject(index, fromHistory = false) {
   $('detail-tags').replaceChildren(...p.tags.map(tag => { const span = document.createElement('span'); span.textContent = tag; return span; }));
   $('external-link').href = p.url; $('fallback-link').href = p.url;
   $('frame-loading').hidden = false;
-  $('project-iframe').title = p.title.replace('\n',' ') + ' 실제 웹사이트';
-  $('project-iframe').src = p.url;
+  replaceProjectFrame(p);
   $('next-detail').querySelector('strong').textContent = projects[(index+1)%projects.length].title.replace('\n',' ');
   document.querySelector('.project-story').scrollTop = 0;
   $('detail').scrollTop = 0; $('close-detail').focus({ preventScroll: true });
-  if (!fromHistory) history.pushState({ project: p.id }, '', '#project/' + p.id);
+  if (!fromHistory) {
+    if (!location.hash.startsWith('#project/')) history.replaceState(null,'','#gallery/' + p.id);
+    history.pushState({ project: p.id }, '', '#project/' + p.id);
+  }
   announce(p.title.replace('\n',' ') + ' 상세 화면. 웹사이트를 직접 조작할 수 있습니다.');
 }
 function closeProject() {
+  restoreFocus = true;
   focusProject(selected);
-  $('project-iframe').removeAttribute('src'); $('details-button').focus({ preventScroll: true });
+  replaceProjectFrame();
 }
-$('project-iframe').addEventListener('load', () => { $('frame-loading').hidden = true; });
+function replaceProjectFrame(project) {
+  // A fresh browsing context avoids extra Back steps from previous embedded sites.
+  const previous = $('project-iframe'), frame = previous.cloneNode(false);
+  frame.removeAttribute('src');
+  if (project) {
+    frame.title = project.title.replace('\n',' ') + ' 실제 웹사이트'; frame.src = project.url;
+    frame.addEventListener('load',() => { $('frame-loading').hidden = true; },{once:true});
+  }
+  previous.replaceWith(frame);
+}
 $('enter-button').addEventListener('click', enter);
 $('about-button').addEventListener('click', () => $('about-dialog').showModal());
 $('index-button').addEventListener('click', () => $('index-dialog').showModal());
@@ -126,10 +154,10 @@ document.querySelectorAll('[data-open]').forEach(button => {
 document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 document.querySelector('.brand').addEventListener('click', (event) => {
   event.preventDefault(); setMode('intro'); gallery.setView('intro');
-  $('project-iframe').removeAttribute('src'); history.pushState(null,'','#'); $('enter-button').focus();
+  replaceProjectFrame(); history.pushState(null,'','#'); $('enter-button').focus();
 });
 function navigate(delta) {
-  if (modalOpen() || !['overview','focus'].includes(mode)) return;
+  if (inspectionLocked || modalOpen() || !['overview','focus'].includes(mode)) return;
   if (mode === 'overview') {
     travel = Math.max(0, Math.min(1, travel + Math.max(-120, Math.min(120, delta))*.0008));
     gallery.setView(mode,selected,travel);
@@ -156,6 +184,11 @@ window.addEventListener('pointercancel', () => { dragStart = null; });
 window.addEventListener('keydown', (event) => {
   if (modalOpen()) return;
   if (event.key === 'Escape' && mode === 'detail') { closeProject(); return; }
+  if (inspectionLocked) {
+    if (event.key === 'Escape') { restoreFocus = true; focusProject(selected); }
+    if (['Escape','ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(event.key)) event.preventDefault();
+    return;
+  }
   if (['overview','focus'].includes(mode) && ['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(event.key)) {
     event.preventDefault();
     const delta = ['ArrowRight','ArrowDown'].includes(event.key) ? 1 : -1;
@@ -168,10 +201,10 @@ function readRoute() {
   if (section === 'project' && index >= 0) openProject(index,true);
   else if (section === 'space') {
     setMode('overview'); travel = 0; updateHeading(); gallery.setView('overview',selected,travel);
-    $('project-iframe').removeAttribute('src');
+    replaceProjectFrame();
   } else if (section === 'gallery') {
-    $('project-iframe').removeAttribute('src'); focusProject(index >= 0 ? index : 0, mode === 'intro');
-  } else { setMode('intro'); gallery.setView('intro'); $('project-iframe').removeAttribute('src'); }
+    replaceProjectFrame(); focusProject(index >= 0 ? index : 0, mode === 'intro');
+  } else { setMode('intro'); gallery.setView('intro'); replaceProjectFrame(); }
 }
 window.addEventListener('popstate', readRoute);
 

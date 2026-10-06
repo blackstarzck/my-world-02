@@ -5,6 +5,7 @@ import { projects, previewMarkup } from './projects.js';
 import { rooms, walls, portals, exhibits, screenSize, stops, routeLength, sampleRoute, routeYaw, nearestStop } from './space.js';
 import { createMotion, travelDim } from './motion.js';
 import { createLook } from './look.js';
+import { createInspection, frontPose } from './inspection.js';
 
 export function createGallery(container, onSelect, onUnavailable, onTravel = () => {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -14,7 +15,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); }
   catch {
     onUnavailable();
-    return { setView(mode, index) { onTravel({ moving: false, mode, index }); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
+    return { setView(mode, index) { onTravel({ moving: false, mode, index, phase: 'idle' }); }, inspect(index,ready) { ready(); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
   }
   renderer.setClearColor('#ededed', 1);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
@@ -41,7 +42,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   dimmer.className = 'travel-dimmer'; dimmer.setAttribute('aria-hidden','true'); container.append(dimmer);
   function pointerLook(event) {
     if (event.pointerType !== 'mouse' || event.buttons || !finePointer.matches || reduced.matches) return;
-    if (!['focus','overview'].includes(mode) || event.target.closest('dialog,.detail')) return;
+    if (pendingOpen || inspection.phase !== 'idle' || !['focus','overview'].includes(mode) || event.target.closest('dialog,.detail')) return;
     const bounds = container.getBoundingClientRect();
     look.target((event.clientX-bounds.left)/bounds.width*2-1,(event.clientY-bounds.top)/bounds.height*2-1);
   }
@@ -128,6 +129,9 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
 
   let mode = 'intro', viewIndex = 0, started = false, lastReport = '';
   const motion = createMotion(0,{max:routeLength});
+  const inspection = createInspection();
+  let pendingOpen = null, resumeDistance = null, inspectionIndex = 0, entryLook = {yaw:0,pitch:0};
+  const isMoving = () => mode !== 'detail' && (motion.moving || !!pendingOpen || inspection.phase === 'returning' || resumeDistance !== null);
   const artworks = [], raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   projects.forEach((project,index) => {
     const p = exhibits[index], group = new THREE.Group(), yaw = p.yaw*Math.PI/180;
@@ -139,7 +143,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     element.setAttribute('aria-label', project.title.replace('\n',' ') + ' 프로젝트 열기');
     element.innerHTML = previewMarkup(project);
     element.addEventListener('click', event => {
-      if (motion.moving || mode === 'intro' || mode === 'detail' || element.disabled) return;
+      if (isMoving() || mode === 'intro' || mode === 'detail' || element.disabled) return;
       if (event.detail > 0) {
         const bounds = container.getBoundingClientRect();
         pointer.set((event.clientX-bounds.left)/bounds.width*2-1,-(event.clientY-bounds.top)/bounds.height*2+1);
@@ -168,32 +172,63 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     artworks.push({element, position:group.position.clone(), normal:new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)), mesh, object});
   });
   function report() {
-    const moving = motion.moving && mode !== 'detail';
+    const moving = isMoving();
+    const phase = pendingOpen && inspection.phase === 'idle' ? 'travelling' : inspection.phase;
     const index = mode === 'overview' ? nearestStop(motion.position) : viewIndex;
-    const signature = [moving, mode, index].join(':');
+    const signature = [moving, mode, index, phase].join(':');
     if (signature === lastReport) return;
     container.setAttribute('aria-busy', String(moving));
     container.dataset.station = String(moving ? -1 : index);
-    lastReport = signature; onTravel({ moving, mode, index });
+    container.dataset.projectPhase = phase;
+    lastReport = signature; onTravel({ moving, mode, index, phase });
   }
   function placeCamera() {
     sampleRoute(motion.position,camera.position);
     camera.rotation.set(lookPose.pitch,routeYaw(motion.position,camera.aspect)+lookPose.yaw,0);
+    if (inspection.phase !== 'idle') {
+      const front = frontPose(exhibits[inspectionIndex],camera.aspect), blend = inspection.blend;
+      const yaw = routeYaw(motion.position,camera.aspect)+entryLook.yaw;
+      camera.position.lerp(front.position,blend);
+      camera.rotation.set(entryLook.pitch*(1-blend),yaw+(front.yaw-yaw)*blend,0);
+    }
     camera.updateMatrixWorld();
   }
+  function beginInspection() {
+    inspectionIndex = pendingOpen.index; entryLook = {...lookPose}; look.reset();
+    inspection.open(reduced.matches);
+  }
+  function inspect(index, ready) {
+    pendingOpen = {index,ready}; resumeDistance = null;
+    mode = 'focus'; viewIndex = index; inspection.reset();
+    motion.target(stops[index],reduced.matches);
+    if (!motion.moving) beginInspection();
+    started = true; report();
+  }
   function setView(nextMode, index = 0, travel, immediate = false) {
-    const previousMode = mode;
+    pendingOpen = null; resumeDistance = null;
     mode = nextMode; viewIndex = index;
     const distance = mode === 'intro' ? 0 : mode === 'overview'
       ? (travel === undefined ? motion.destination : Math.max(0,Math.min(1,travel))*routeLength)
       : stops[index];
-    motion.target(distance, immediate || !started || reduced.matches || mode === 'detail' || previousMode === 'detail');
+    const skip = immediate || !started || reduced.matches;
+    if (mode === 'detail') {
+      if (inspectionIndex !== index || inspection.phase === 'idle') entryLook = {yaw:0,pitch:0};
+      inspectionIndex = index; motion.target(distance,true); inspection.open(true); inspection.takeReady();
+    } else if (inspection.phase !== 'idle' && mode !== 'intro' && !skip) {
+      inspection.close();
+      if (distance !== motion.position) resumeDistance = distance;
+    } else { inspection.reset(); motion.target(distance,skip); }
     if (mode === 'detail' || mode === 'intro') { look.reset(); lookPose = {yaw:0,pitch:0}; }
     if (!motion.moving || mode === 'detail' || reduced.matches) dimmer.style.opacity = '0';
     started = true; placeCamera(); report();
   }
   function reduceMotion() {
-    if (reduced.matches) { motion.target(motion.destination,true); look.reset(); lookPose = {yaw:0,pitch:0}; dimmer.style.opacity = '0'; placeCamera(); report(); }
+    if (reduced.matches) {
+      motion.target(resumeDistance ?? motion.destination,true); resumeDistance = null;
+      look.reset(); lookPose = entryLook = {yaw:0,pitch:0};
+      if (pendingOpen && inspection.phase === 'idle') beginInspection();
+      inspection.settle(); dimmer.style.opacity = '0'; placeCamera(); report();
+    }
   }
   reduced.addEventListener('change',reduceMotion);
   const resize = () => {
@@ -217,7 +252,12 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     const dt = Math.min((time-lastTime)/1000,.05); lastTime = time;
     if (document.hidden || mode === 'detail') return;
     motion.step(dt);
-    lookPose = look.step(dt,{enabled:finePointer.matches && !reduced.matches && ['focus','overview'].includes(mode),moving:motion.moving});
+    inspection.step(dt);
+    if (inspection.phase === 'idle') {
+      if (resumeDistance !== null) { motion.target(resumeDistance); resumeDistance = null; }
+      lookPose = look.step(dt,{enabled:finePointer.matches && !reduced.matches && ['focus','overview'].includes(mode),moving:motion.moving});
+      if (pendingOpen && !motion.moving) beginInspection();
+    }
     placeCamera(); report();
     dimmer.style.opacity = String(mode === 'focus' && !reduced.matches ? travelDim(motion.velocity) : 0);
     for (const artwork of artworks) {
@@ -226,7 +266,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       const visible = direction.dot(artwork.normal) > .08 && distance < 55;
       projected.copy(artwork.position).project(camera);
       const inView = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
-      let accessible = visible && inView && mode !== 'intro' && !motion.moving;
+      let accessible = visible && inView && mode !== 'intro' && !isMoving();
       if (accessible) {
         direction.negate().normalize(); raycaster.set(camera.position,direction);
         const wall = raycaster.intersectObjects(occluders,false)[0];
@@ -243,12 +283,15 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     }
     renderer.render(scene,camera);
     if (nativeHTML) interactions.update(); else htmlRenderer.render(htmlScene,camera);
+    if (pendingOpen && inspection.takeReady()) {
+      const ready = pendingOpen.ready; pendingOpen = null; ready();
+    }
   }
   placeCamera(); frameId = requestAnimationFrame(animate);
   return {
-    setView,
+    setView, inspect,
     getProgress: () => motion.destination/routeLength,
-    isMoving: () => motion.moving,
+    isMoving,
     dispose() {
       cancelAnimationFrame(frameId); observer.disconnect(); interactions.disconnect();
       reduced.removeEventListener('change',reduceMotion);

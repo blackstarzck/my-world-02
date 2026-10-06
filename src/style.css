@@ -22,6 +22,8 @@
 @keyframes reveal{from{opacity:0}to{opacity:1}}
 
 .world-project:disabled{opacity:1;cursor:default}.world-project:disabled:hover{filter:none}
+.gallery-ui,.site-header,.site-footer{transition:opacity .25s ease}
+body[data-inspecting="true"] .gallery-ui,body[data-inspecting="true"] .site-header,body[data-inspecting="true"] .site-footer{opacity:0;pointer-events:none}
 .travel-dimmer{position:absolute;inset:0;z-index:3;background:#111;opacity:0;pointer-events:none}
 @media(prefers-reduced-motion:reduce){.travel-dimmer{display:none}}
 .gallery-guide{top:108px}
