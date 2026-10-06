@@ -7,6 +7,21 @@
     <meta name="description" content="프로젝트를 걷고, 발견하고, 직접 경험하는 개인 포트폴리오 갤러리." />
     <title>My World — A Digital Gallery</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      body{margin:0;background:#08090a}.gallery-loader{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:#08090a;color:#eee;font:12px/1.7 Arial,sans-serif}.gallery-loader[hidden]{display:none}.loader-content{width:min(280px,75vw);text-align:center}.loader-brand{font:400 56px/1.1 Georgia,serif;letter-spacing:-2px;margin:0 0 12px}.loader-caption{font-size:9px;letter-spacing:.22em;color:#aaa}.gallery-loader progress{display:block;width:100%;height:2px;margin:48px 0 22px;border:0;background:#292b2c;accent-color:#dededb}.gallery-loader progress::-webkit-progress-bar{background:#292b2c}.gallery-loader progress::-webkit-progress-value{background:#dededb}.gallery-loader progress::-moz-progress-bar{background:#dededb}.loader-label{min-height:42px;color:#b9babb;word-break:keep-all}.loader-retry{margin-top:18px;border:1px solid #777;border-radius:24px;padding:10px 22px;color:#eee;background:transparent;cursor:pointer}.loader-retry[hidden]{display:none}
+    </style>
   </head>
-  <body><div id="app"></div><script type="module" src="/src/main.js"></script></body>
+  <body>
+    <div id="app" inert></div>
+    <section id="gallery-loader" class="gallery-loader" aria-label="갤러리 준비" aria-busy="true">
+      <div class="loader-content">
+        <p class="loader-brand">My World.</p><span class="loader-caption">A DIGITAL GALLERY</span>
+        <progress id="gallery-progress" max="1" value="0" aria-label="갤러리 준비 진행률"></progress>
+        <p id="gallery-loading-label" class="loader-label" role="status" aria-live="polite">전시 공간을 불러오고 있어요</p>
+        <button id="gallery-retry" class="loader-retry" hidden>다시 불러오기</button>
+        <noscript>갤러리를 보려면 브라우저에서 자바스크립트를 켜 주세요.</noscript>
+      </div>
+    </section>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

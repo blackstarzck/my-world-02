@@ -6,6 +6,8 @@ import { rooms, walls, portals, exhibits, screenSize, stops, routeLength, sample
 import { createMotion, travelDim } from './motion.js';
 import { createLook } from './look.js';
 import { createInspection, frontPose } from './inspection.js';
+import { batchArchitecture, createFrameLoop, renderPixelRatio } from './rendering.js';
+import { nextPaint, preparePreviews } from './loading.js';
 
 export function createGallery(container, onSelect, onUnavailable, onTravel = () => {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -15,10 +17,9 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); }
   catch {
     onUnavailable();
-    return { setView(mode, index) { onTravel({ moving: false, mode, index, phase: 'idle' }); }, inspect(index,ready) { ready(); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
+    return { async prepare() {}, start() {}, setView(mode, index) { onTravel({ moving: false, mode, index, phase: 'idle' }); }, inspect(index,ready) { ready(); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
   }
   renderer.setClearColor('#08090a', 1);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   // VSM blurs the shadow map itself, avoiding the old low-resolution jagged edge.
@@ -34,20 +35,24 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   const interactions = new InteractionManager();
   const camera = new THREE.PerspectiveCamera(60, 1, .08, 100);
   camera.rotation.order = 'YXZ';
-  interactions.connect(renderer, camera);
+  if (nativeHTML) interactions.connect(renderer, camera);
   const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
   const look = createLook();
   let lookPose = { yaw: 0, pitch: 0 };
+  let loop, ready = false, disposed = false, pointerBounds, frontPoses, projectionChanged = true;
+  const wake = () => loop?.wake();
+  const profiling = import.meta.env.DEV && new URLSearchParams(location.search).has('profile');
   const dimmer = document.createElement('div');
   dimmer.className = 'travel-dimmer'; dimmer.setAttribute('aria-hidden','true'); container.append(dimmer);
   function pointerLook(event) {
     if (event.pointerType !== 'mouse' || event.buttons || !finePointer.matches || reduced.matches) return;
     if (pendingOpen || inspection.phase !== 'idle' || !['focus','overview'].includes(mode) || event.target.closest('dialog,.detail')) return;
-    const bounds = container.getBoundingClientRect();
+    const bounds = pointerBounds;
     look.target((event.clientX-bounds.left)/bounds.width*2-1,(event.clientY-bounds.top)/bounds.height*2-1);
+    wake();
   }
-  const resetLook = () => look.reset();
-  window.addEventListener('pointermove',pointerLook);
+  const resetLook = () => { look.reset(); wake(); };
+  window.addEventListener('pointermove',pointerLook,{passive:true});
   document.addEventListener('mouseleave',resetLook); window.addEventListener('blur',resetLook);
 
   const grainData = new Uint8Array(256*256*4);
@@ -67,11 +72,11 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   const dark = new THREE.MeshStandardMaterial({ color: '#292929', roughness: .95 });
   const seam = new THREE.MeshStandardMaterial({ color: '#c9c9c9', roughness: 1 });
   const glow = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-  const occluders = [];
+  const occluders = [], architecture = [];
   function box(w, h, d, x, y, z, material, blocksArtwork = true) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z); mesh.castShadow = h > .15; mesh.receiveShadow = true;
-    scene.add(mesh); if (blocksArtwork) occluders.push(mesh); return mesh;
+    scene.add(mesh); architecture.push(mesh); if (blocksArtwork) occluders.push(mesh); return mesh;
   }
   walls.forEach(wall => box(...wall.size, ...wall.center, clay));
   rooms.forEach(room => {
@@ -108,6 +113,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       const housing = new THREE.Mesh(new THREE.CylinderGeometry(.115,.135,.32,16),dark);
       const lens = new THREE.Mesh(new THREE.CylinderGeometry(.107,.107,.014,16),glow);
       lens.position.y = -.166; head.add(housing,lens); scene.add(head);
+      architecture.push(housing,lens);
       box(.06,.18,.06,railX,railY-.1,p.z+offset,dark,false);
       if (offset !== 0) continue;
       const spot = new THREE.SpotLight('#ffffff', index === 1 ? 110 : 80, 14, .95, 1, 2);
@@ -163,7 +169,8 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       }));
       group.add(mesh);
     }
-    artworks.push({element, position:group.position.clone(), normal:new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)), mesh, object});
+    artworks.push({element, position:group.position.clone(), normal:new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)), mesh, object,
+      bounds:new THREE.Sphere(group.position.clone(), Math.hypot(screenSize.width,screenSize.height)/2)});
   });
   function report() {
     const moving = isMoving();
@@ -180,7 +187,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     sampleRoute(motion.position,camera.position);
     camera.rotation.set(lookPose.pitch,routeYaw(motion.position,camera.aspect)+lookPose.yaw,0);
     if (inspection.phase !== 'idle') {
-      const front = frontPose(exhibits[inspectionIndex],camera.aspect), blend = inspection.blend;
+      const front = frontPoses[inspectionIndex], blend = inspection.blend;
       const yaw = routeYaw(motion.position,camera.aspect)+entryLook.yaw;
       camera.position.lerp(front.position,blend);
       camera.rotation.set(entryLook.pitch*(1-blend),yaw+(front.yaw-yaw)*blend,0);
@@ -196,7 +203,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     mode = 'focus'; viewIndex = index; inspection.reset();
     motion.target(stops[index],reduced.matches);
     if (!motion.moving) beginInspection();
-    started = true; report();
+    started = true; report(); wake();
   }
   function setView(nextMode, index = 0, travel, immediate = false) {
     pendingOpen = null; resumeDistance = null;
@@ -214,7 +221,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     } else { inspection.reset(); motion.target(distance,skip); }
     if (mode === 'detail' || mode === 'intro') { look.reset(); lookPose = {yaw:0,pitch:0}; }
     if (!motion.moving || mode === 'detail' || reduced.matches) dimmer.style.opacity = '0';
-    started = true; placeCamera(); report();
+    started = true; placeCamera(); report(); updatePause();
   }
   function reduceMotion() {
     if (reduced.matches) {
@@ -223,10 +230,14 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       if (pendingOpen && inspection.phase === 'idle') beginInspection();
       inspection.settle(); dimmer.style.opacity = '0'; placeCamera(); report();
     }
+    wake();
   }
   reduced.addEventListener('change',reduceMotion);
   const resize = () => {
     const width = container.clientWidth, height = container.clientHeight;
+    if (!width || !height) return;
+    pointerBounds = container.getBoundingClientRect();
+    renderer.setPixelRatio(renderPixelRatio(width,height,devicePixelRatio));
     renderer.setSize(width,height); htmlRenderer.setSize(width,height);
     camera.aspect = width/height; camera.fov = 60;
     camera.zoom = Math.min(1,camera.aspect/.76);
@@ -235,32 +246,36 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     if (width <= 600 && height < 700) camera.setViewOffset(width,height,0,(700-height)*.27,width,height);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
+    projectionChanged = true;
+    frontPoses = exhibits.map(art => frontPose(art,camera.aspect));
+    wake();
   };
   const observer = new ResizeObserver(resize); observer.observe(container); resize();
   const direction = new THREE.Vector3(), projected = new THREE.Vector3();
+  const frustum = new THREE.Frustum(), viewProjection = new THREE.Matrix4();
+  batchArchitecture(scene,architecture,occluders);
+  architecture.length = 0;
   scene.updateMatrixWorld(true);
   scene.matrixWorldAutoUpdate = false;
-  let frameId, lastTime = performance.now();
-  function animate(time) {
-    frameId = requestAnimationFrame(animate);
-    const dt = Math.min((time-lastTime)/1000,.05); lastTime = time;
-    if (document.hidden || mode === 'detail') return;
-    motion.step(dt);
-    inspection.step(dt);
-    if (inspection.phase === 'idle') {
-      if (resumeDistance !== null) { motion.target(resumeDistance); resumeDistance = null; }
-      lookPose = look.step(dt,{enabled:finePointer.matches && !reduced.matches && ['focus','overview'].includes(mode),moving:motion.moving});
-      if (pendingOpen && !motion.moving) beginInspection();
-    }
-    placeCamera(); report();
-    dimmer.style.opacity = String(mode === 'focus' && !reduced.matches ? travelDim(motion.velocity) : 0);
+  htmlScene.updateMatrixWorld(true); htmlScene.matrixWorldAutoUpdate = false;
+  let lastDim = -1, previousCamera = new THREE.Matrix4(), cameraChanged = true, wasAnimating;
+  let intervals = [], calls = [];
+  function render() {
+    cameraChanged = !previousCamera.equals(camera.matrixWorld) || projectionChanged;
+    previousCamera.copy(camera.matrixWorld); projectionChanged = false;
+    const dim = mode === 'focus' && !reduced.matches ? travelDim(motion.velocity) : 0;
+    if (dim !== lastDim) { dimmer.style.opacity = String(dim); lastDim = dim; }
+    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    const moving = isMoving();
+    const animating = moving || look.moving;
+    if (animating !== wasAnimating) { container.dataset.cameraMoving = String(animating); wasAnimating = animating; }
     for (const artwork of artworks) {
       direction.subVectors(camera.position,artwork.position);
       const distance = direction.length();
-      const visible = direction.dot(artwork.normal) > .08 && distance < 55;
+      const visible = direction.dot(artwork.normal) > .08 && distance < 55 && frustum.intersectsSphere(artwork.bounds);
       projected.copy(artwork.position).project(camera);
       const inView = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
-      let accessible = visible && inView && mode !== 'intro' && !isMoving();
+      let accessible = visible && inView && mode !== 'intro' && mode !== 'detail' && !moving;
       if (accessible) {
         direction.negate().normalize(); raycaster.set(camera.position,direction);
         const wall = raycaster.intersectObjects(occluders,false)[0];
@@ -268,6 +283,8 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       }
       if (artwork.visible !== visible) {
         artwork.visible = visible; artwork.element.style.visibility = visible ? 'visible' : 'hidden'; artwork.mesh.visible = visible;
+        if (artwork.object) artwork.object.visible = visible;
+        artwork.element.dataset.visible = String(visible);
       }
       if (artwork.accessible !== accessible) {
         artwork.accessible = accessible; artwork.element.style.pointerEvents = accessible ? 'auto' : 'none';
@@ -276,22 +293,71 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
       }
     }
     renderer.render(scene,camera);
-    if (nativeHTML) interactions.update(); else htmlRenderer.render(htmlScene,camera);
+    if (nativeHTML) { if (cameraChanged) interactions.update(); }
+    else htmlRenderer.render(htmlScene,camera);
+  }
+  function animate(dt) {
+    motion.step(dt);
+    inspection.step(dt);
+    if (inspection.phase === 'idle') {
+      if (resumeDistance !== null) { motion.target(resumeDistance); resumeDistance = null; }
+      lookPose = look.step(dt,{enabled:finePointer.matches && !reduced.matches && ['focus','overview'].includes(mode),moving:motion.moving});
+      if (pendingOpen && !motion.moving) beginInspection();
+    }
+    placeCamera(); report(); render();
     if (pendingOpen && inspection.takeReady()) {
       const ready = pendingOpen.ready; pendingOpen = null; ready();
     }
+    const again = isMoving() || (inspection.phase === 'idle' && look.moving);
+    if (profiling) {
+      intervals.push(dt*1000); calls.push(renderer.info.render.calls);
+      if (!again || intervals.length >= 120) {
+        const sorted = intervals.slice().sort((a,b)=>a-b);
+        console.info('[gallery performance]', JSON.stringify({frames:intervals.length,meanMs:+(intervals.reduce((a,b)=>a+b,0)/intervals.length).toFixed(1),p95Ms:+sorted[Math.floor(sorted.length*.95)].toFixed(1),drawCalls:Math.max(...calls),mode,idle:!again}));
+        intervals=[]; calls=[];
+      }
+    }
+    return again;
   }
-  placeCamera(); frameId = requestAnimationFrame(animate);
+  loop = createFrameLoop(animate);
+  function updatePause() { loop.setPaused(!ready || document.hidden || mode === 'detail'); }
+  function htmlPaint(event) {
+    if (artworks.some(art => art.visible && event.changedElements?.includes(art.element))) wake();
+  }
+  document.addEventListener('visibilitychange',updatePause);
+  document.fonts?.addEventListener('loadingdone',wake);
+  if (nativeHTML) renderer.domElement.addEventListener('paint',htmlPaint);
+  placeCamera();
   return {
     setView, inspect,
+    async prepare(progress = () => {}) {
+      progress(.35,'작품 화면과 글꼴을 준비하고 있어요');
+      await preparePreviews(artworks.map(art => art.element), fraction => progress(.35+fraction*.25,'작품 화면과 글꼴을 준비하고 있어요'));
+      if (disposed) return;
+      progress(.65,'전시 공간의 조명을 준비하고 있어요'); await nextPaint();
+      if (disposed) return;
+      renderer.initTexture(grain);
+      if (nativeHTML) artworks.forEach(art => renderer.initTexture(art.mesh.material.map));
+      await renderer.compileAsync(scene,camera);
+      if (disposed) return;
+      progress(.9,'마지막으로 화면을 정리하고 있어요'); await nextPaint();
+      if (disposed) return;
+      render(); // Warm static shadow maps and all texture uploads behind the loader.
+      await nextPaint();
+    },
+    start() { if (disposed) return; ready = true; render(); updatePause(); },
     getProgress: () => motion.destination/routeLength,
     isMoving,
     dispose() {
-      cancelAnimationFrame(frameId); observer.disconnect(); interactions.disconnect();
+      disposed = true; loop.dispose(); observer.disconnect(); interactions.disconnect();
+      document.removeEventListener('visibilitychange',updatePause);
+      document.fonts?.removeEventListener('loadingdone',wake);
+      if (nativeHTML) renderer.domElement.removeEventListener('paint',htmlPaint);
       reduced.removeEventListener('change',reduceMotion);
       window.removeEventListener('pointermove',pointerLook); document.removeEventListener('mouseleave',resetLook); window.removeEventListener('blur',resetLook);
       const materials = new Set();
       scene.traverse(object => { object.geometry?.dispose(); object.shadow?.dispose(); if (object.material) materials.add(object.material); });
+      occluders.forEach(object => object.geometry.dispose());
       materials.forEach(material => { if (material.map && material.map !== grain) material.map.dispose(); material.dispose(); });
       grain.dispose(); renderer.dispose(); container.replaceChildren();
     },

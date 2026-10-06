@@ -1,6 +1,6 @@
 import './style.css';
 import { projects, portfolio, previewMarkup } from './projects.js';
-import { createGallery } from './gallery.js';
+import { nextPaint } from './loading.js';
 
 const app = document.querySelector('#app');
 app.innerHTML = `
@@ -24,7 +24,7 @@ let inspectionLocked = false, restoreFocus = false;
 const dialogs = [$('index-dialog'), $('about-dialog')];
 const modalOpen = () => dialogs.some(dialog => dialog.open);
 const announce = (text) => { $('announcement').textContent = text; };
-const gallery = createGallery($('world'), openProject, () => { unavailable = true; }, onTravel);
+let gallery, loading = true, disposed = false;
 
 function setMode(next) {
   mode = next; document.body.dataset.mode = mode;
@@ -157,7 +157,7 @@ document.querySelector('.brand').addEventListener('click', (event) => {
   replaceProjectFrame(); history.pushState(null,'','#'); $('enter-button').focus();
 });
 function navigate(delta) {
-  if (inspectionLocked || modalOpen() || !['overview','focus'].includes(mode)) return;
+  if (loading || inspectionLocked || modalOpen() || !['overview','focus'].includes(mode)) return;
   if (mode === 'overview') {
     travel = Math.max(0, Math.min(1, travel + Math.max(-120, Math.min(120, delta))*.0008));
     gallery.setView(mode,selected,travel);
@@ -182,7 +182,7 @@ window.addEventListener('pointerup', (event) => {
 });
 window.addEventListener('pointercancel', () => { dragStart = null; });
 window.addEventListener('keydown', (event) => {
-  if (modalOpen()) return;
+  if (loading || modalOpen()) return;
   if (event.key === 'Escape' && mode === 'detail') { closeProject(); return; }
   if (inspectionLocked) {
     if (event.key === 'Escape') { restoreFocus = true; focusProject(selected); }
@@ -196,6 +196,7 @@ window.addEventListener('keydown', (event) => {
   }
 });
 function readRoute() {
+  if (loading) return;
   const [section, id] = location.hash.slice(1).split('/');
   const index = projects.findIndex(p => p.id === id);
   if (section === 'project' && index >= 0) openProject(index,true);
@@ -225,5 +226,42 @@ $('sound-button').addEventListener('click', async () => {
   $('sound-button').querySelector('span').textContent = `Sound ${soundOn ? 'ON' : 'OFF'}`;
 });
 document.addEventListener('visibilitychange', () => { if (audioGain) audioGain.gain.setTargetAtTime(!document.hidden && soundOn ? .18 : 0, audioContext.currentTime, .3); });
-setMode('intro'); readRoute();
-if (import.meta.hot) import.meta.hot.dispose(() => { gallery.dispose(); audioContext?.close(); });
+function loadingProgress(value, label) {
+  if (disposed) return;
+  $('gallery-progress').value = value;
+  if ($('gallery-loading-label').textContent !== label) $('gallery-loading-label').textContent = label;
+}
+async function startGallery() {
+  const slowLoad = setTimeout(() => { if (!disposed && loading) $('gallery-retry').hidden = false; },12000);
+  try {
+    loadingProgress(.05,'전시 공간을 불러오고 있어요');
+    await nextPaint();
+    const { createGallery } = await import('./gallery.js');
+    if (disposed) return;
+    loadingProgress(.25,'전시 공간을 구성하고 있어요'); await nextPaint();
+    if (disposed) return;
+    gallery = createGallery($('world'), openProject, () => { unavailable = true; }, onTravel);
+    await gallery.prepare(loadingProgress);
+    if (disposed) return;
+    loading = false; setMode('intro'); readRoute(); gallery.start();
+    loadingProgress(1, unavailable ? '작품 목록으로 갤러리를 둘러보세요' : '전시 준비가 완료됐어요');
+    await nextPaint();
+    if (disposed) return;
+    app.inert = false; $('gallery-loader').setAttribute('aria-busy','false'); $('gallery-loader').hidden = true;
+    if (unavailable && mode !== 'detail') { $('index-dialog').showModal(); announce('이 브라우저에서는 작품 목록으로 갤러리를 둘러볼 수 있습니다.'); }
+    else if (mode === 'detail') $('close-detail').focus({preventScroll:true});
+  } catch (error) {
+    if (disposed) return;
+    loading = true; app.inert = true;
+    gallery?.dispose(); gallery = undefined;
+    console.error('Gallery preparation failed',error);
+    $('gallery-loader').setAttribute('aria-busy','false'); $('gallery-progress').hidden = true;
+    $('gallery-loading-label').textContent = '공간을 준비하지 못했어요. 연결을 확인하고 다시 불러와 주세요.';
+    $('gallery-retry').hidden = false;
+  } finally {
+    clearTimeout(slowLoad);
+  }
+}
+$('gallery-retry').addEventListener('click',() => location.reload());
+startGallery();
+if (import.meta.hot) import.meta.hot.dispose(() => { disposed = true; gallery?.dispose(); audioContext?.close(); });
