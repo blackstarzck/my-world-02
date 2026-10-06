@@ -33,16 +33,17 @@ body[data-moving="true"] #details-button{opacity:.45}
 @media(max-width:600px) and (max-height:700px){.project-heading h1{font-size:34px;margin-top:12px}.project-heading .text-button{margin-top:12px}.gallery-guide{top:105px}.site-header{padding-top:22px}}
 @media(max-height:600px) and (min-width:601px){.gallery-guide{top:100px}.gallery-footer{bottom:72px}.project-heading h1{font-size:42px}.project-heading .text-button{margin-top:13px}.gallery-controls{bottom:0}.site-footer{bottom:15px}}
 
-/* Neutral typography and atmosphere for the white clay exhibition. */
-.world{background:#ededed}.atmosphere{background:radial-gradient(ellipse at 50% 42%,transparent 45%,#00000006 100%)}
-.site-header,.site-footer,.gallery-ui,.entrance{color:#303030;--line:#30303040}
-.site-header{background:linear-gradient(#f5f5f5ed,#f5f5f5ad 60%,transparent)}
-.menu-icon i,.sound-button i{background:currentColor}.edition{color:#565656}
-.entrance{background:linear-gradient(90deg,#f3f3f3d9 0%,#f3f3f366 22%,transparent 38%,transparent 62%,#f3f3f366 78%,#f3f3f3d9 100%)}
-.entrance-eyebrow,.entrance-note{color:#505050}.enter-button{border-color:#30303066;background:#ffffff66}.enter-button:hover{background:#ffffffb3;border-color:#303030}
-.gallery-guide,.gallery-guide button,.gallery-ui .eyebrow,.counter{color:#595959}.gallery-guide button:hover{color:#111}.gallery-guide>i{background:#777}
-.gallery-guide{padding:0 13px;border:1px solid #0000000a;border-radius:24px;background:#ffffffd9;backdrop-filter:blur(8px)}
-.gallery-ui .text-button{border-bottom-color:#30303066}.gallery-ui .circle-button:hover:not(:disabled),.gallery-ui .pill-button:hover{background:#0000000a}.gallery-ui .pill-button{border-color:#30303055}
-.project-dots span{background:#707070}.project-dots [aria-current=true] span{background:#262626;box-shadow:0 0 0 3px #00000012}
-body[data-moving="true"] .gallery-guide>span{color:#444}.site-header :focus-visible,.site-footer :focus-visible,.gallery-ui :focus-visible,.entrance :focus-visible{outline-color:#333}
+/* Keep navigation legible while only the artwork track lights illuminate the clay. */
+.world{background:#08090a}.atmosphere{background:radial-gradient(ellipse at 50% 42%,transparent 45%,#00000006 100%)}
+.site-header,.site-footer,.gallery-ui,.entrance{color:#eee;--line:#ffffff40}
+.site-header{background:linear-gradient(#08090ab3,transparent)}
+.menu-icon i,.sound-button i{background:currentColor}.edition{color:#bcbcbc}
+.entrance{background:linear-gradient(90deg,#08090ab3 0%,#08090a33 22%,transparent 38%,transparent 62%,#08090a33 78%,#08090ab3 100%)}
+.entrance-eyebrow,.entrance-note{color:#c6c6c6}.enter-button{border-color:#ffffff66;background:#11111166}.enter-button:hover{background:#ffffff1a;border-color:#eee}
+.gallery-guide,.gallery-guide button,.gallery-ui .eyebrow,.counter{color:#bcbcbc}.gallery-guide button:hover{color:#fff}.gallery-guide>i{background:#888}
+.gallery-guide{padding:0 13px;border:1px solid #ffffff14;border-radius:24px;background:#111111b3;backdrop-filter:blur(8px)}
+.gallery-ui .text-button{border-bottom-color:#ffffff66}.gallery-ui .circle-button:hover:not(:disabled),.gallery-ui .pill-button:hover{background:#ffffff14}.gallery-ui .pill-button{border-color:#ffffff55}
+.project-heading{text-shadow:0 2px 14px #0009}.gallery-controls{border-radius:22px;background:#08090a99;box-shadow:0 0 0 8px #08090a99;backdrop-filter:blur(8px)}
+.project-dots span{background:#858585}.project-dots [aria-current=true] span{background:#eee;box-shadow:0 0 0 3px #ffffff12}
+body[data-moving="true"] .gallery-guide>span{color:#ddd}.site-header :focus-visible,.site-footer :focus-visible,.gallery-ui :focus-visible,.entrance :focus-visible{outline-color:#eee}
 

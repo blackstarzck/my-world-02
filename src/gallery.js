@@ -10,14 +10,14 @@ import { createInspection, frontPose } from './inspection.js';
 export function createGallery(container, onSelect, onUnavailable, onTravel = () => {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const scene = new THREE.Scene(), htmlScene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#ededed', 28, 75);
+  scene.fog = new THREE.Fog('#08090a', 28, 75);
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); }
   catch {
     onUnavailable();
     return { setView(mode, index) { onTravel({ moving: false, mode, index, phase: 'idle' }); }, inspect(index,ready) { ready(); }, getProgress: () => 0, isMoving: () => false, dispose() {} };
   }
-  renderer.setClearColor('#ededed', 1);
+  renderer.setClearColor('#08090a', 1);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
@@ -65,7 +65,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
   const ceiling = new THREE.MeshStandardMaterial({ color: '#f0f0f0', map: grain, bumpMap: grain, bumpScale: .02, roughness: 1 });
   const floorMaterial = new THREE.MeshStandardMaterial({ color: '#dedede', map: grain, bumpMap: grain, bumpScale: .015, roughness: 1 });
   const dark = new THREE.MeshStandardMaterial({ color: '#292929', roughness: .95 });
-  const seam = new THREE.MeshBasicMaterial({ color: '#c9c9c9' });
+  const seam = new THREE.MeshStandardMaterial({ color: '#c9c9c9', roughness: 1 });
   const glow = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const occluders = [];
   function box(w, h, d, x, y, z, material, blocksArtwork = true) {
@@ -74,7 +74,7 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     scene.add(mesh); if (blocksArtwork) occluders.push(mesh); return mesh;
   }
   walls.forEach(wall => box(...wall.size, ...wall.center, clay));
-  rooms.forEach((room, index) => {
+  rooms.forEach(room => {
     const width = room.x[1]-room.x[0], depth = room.z[1]-room.z[0];
     const x = (room.x[0]+room.x[1])/2, z = (room.z[0]+room.z[1])/2;
     box(width, .24, depth, x, -.12, z, floorMaterial);
@@ -82,22 +82,16 @@ export function createGallery(container, onSelect, onUnavailable, onTravel = () 
     // Fine slab joints give scale without changing the flat walking surface.
     for (let sx = room.x[0]+3; sx < room.x[1]; sx += 3) box(.012, .003, depth, sx, .003, z, seam, false);
     for (let sz = room.z[0]+3; sz < room.z[1]; sz += 3) box(width, .003, .012, x, .003, sz, seam, false);
-    // Ceiling coves and a soft pool of light make the full-height corners legible.
-    box(width-.9, .025, .07, x, room.height-.04, room.z[1]-.48, glow, false);
-    const fill = new THREE.PointLight('#ffffff', index === 1 ? 450 : 220, index === 1 ? 38 : 26, 2);
-    fill.position.set(x, room.height-.6, z); scene.add(fill);
-    // Low perimeter strips belong to the architecture, not a separate partition.
-    for (const side of room.x) box(.025, .045, depth-.8, side+(side===room.x[0] ? .32 : -.32), .07, z, glow, false);
+    // Auxiliary fixtures stay in the architecture, with their light switched off.
+    box(width-.9, .025, .07, x, room.height-.04, room.z[1]-.48, ceiling, false);
+    for (const side of room.x) box(.025, .045, depth-.8, side+(side===room.x[0] ? .32 : -.32), .07, z, ceiling, false);
   });
   // Beams follow the raised ceiling; fixtures hang from visible track rails.
   for (const z of [-10.5, -15.5]) box(21.4, .35, .35, 3, rooms[1].height-.18, z, clay);
   portals.forEach(portal => {
     const x = (portal.x[0]+portal.x[1])/2;
-    box(portal.x[1]-portal.x[0]-.25, .025, .12, x, portal.height-.03, portal.z, glow, false);
-    const light = new THREE.PointLight('#ffffff', 36, 10, 2);
-    light.position.set(x, portal.height-.3, portal.z-.2); scene.add(light);
+    box(portal.x[1]-portal.x[0]-.25, .025, .12, x, portal.height-.03, portal.z, ceiling, false);
   });
-  scene.add(new THREE.HemisphereLight('#ffffff', '#bcbcbc', 2.4));
   exhibits.forEach((p,index) => {
     const room = rooms[index], railY = index === 1 ? 6 : 4.8, railX = p.x+1.25;
     const railZ = p.z, railLength = 5.2;
