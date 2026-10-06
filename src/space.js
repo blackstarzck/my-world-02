@@ -31,8 +31,9 @@ along(3, -7, 3, roomHeight); across(-8, 3, 3, roomHeight);
 across(-8, -1, -7, roomHeight); across(-1, 3, -7, roomHeight, portals[0].height);
 across(-8, 3, -7, hallHeight, roomHeight); across(3, 14, -7, hallHeight);
 along(14, -20, -7, hallHeight);
-// A full-height return from the hall's rear wall forms its left exhibition corner.
-along(-1, -20, -11.7, hallHeight);
+// Join the exhibition wall to the entrance jamb, enclosing the unused rear bay.
+// Leaving a free end exposed a separate partition and gap on the first approach.
+along(-1, -20, portals[0].z, hallHeight);
 across(-8, 10, -20, hallHeight); across(10, 14, -20, hallHeight, portals[1].height);
 across(14, 23, -20, roomHeight);
 along(8, -32, -20, roomHeight); along(23, -32, -20, roomHeight);
